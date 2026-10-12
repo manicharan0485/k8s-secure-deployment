@@ -38,47 +38,34 @@ k8s-secure-deployment/
 │   │   └── templates/
 │   │       ├── deployment.yaml    # Pod security context enforced
 │   │       ├── service.yaml
-│   │       ├── serviceaccount.yaml
-│   │       ├── networkpolicy.yaml
-│   │       ├── rbac.yaml
-│   │       └── hpa.yaml
+│   │       ├── networkpolicy.yaml # Default deny + optional ingress/monitoring rules
+│   │       └── rbac.yaml
 │   └── overlays/
 │       ├── dev/values.yaml
 │       └── prod/values.yaml
 │
 ├── manifests/
 │   ├── rbac/
-│   │   ├── cluster-roles.yaml     # Read-only, developer, operator roles
-│   │   └── namespace-roles.yaml   # Per-namespace bindings
+│   │   └── cluster-roles.yaml     # Read-only, developer, operator roles
 │   ├── network-policies/
 │   │   ├── default-deny-all.yaml  # Block all traffic by default
-│   │   ├── allow-dns.yaml         # Allow kube-dns
-│   │   ├── allow-ingress.yaml     # Allow ingress controller → pods
-│   │   └── allow-monitoring.yaml  # Allow Prometheus scraping
+│   │   └── allow-dns.yaml         # Allow kube-dns
 │   ├── pod-security/
-│   │   ├── podsecurity-labels.yaml   # Namespace-level Pod Security Standards
 │   │   └── gatekeeper-policies.yaml  # OPA Gatekeeper constraints
 │   └── namespaces/
-│       ├── production.yaml
-│       ├── staging.yaml
-│       └── monitoring.yaml
+│       └── production.yaml
 │
 ├── scripts/
 │   ├── trivy-scan.sh              # Scan image + fail on HIGH/CRITICAL
-│   ├── rbac-audit.sh              # Check for overprivileged service accounts
-│   └── network-policy-test.sh    # Verify network policy enforcement
+│   └── rbac-audit.sh              # Check for overprivileged service accounts
 │
 ├── .github/
 │   └── workflows/
 │       ├── security-scan.yml      # Trivy + Kubesec + Checkov on every PR
 │       └── deploy.yml             # Deploy only if scans pass
 │
-├── monitoring/
-│   ├── prometheus/                # Security-focused alerting rules
-│   └── grafana/                   # Security dashboard JSON
-│
-└── terraform/
-    └── eks-cluster/               # Hardened EKS cluster with IRSA
+└── monitoring/
+    └── prometheus/                # Security-focused alerting rules
 ```
 
 ---
@@ -163,11 +150,11 @@ namespace-viewer → Read-only within namespace (monitoring)
 Default posture: **deny all**. Explicit allow rules added per need.
 
 ```
-Internet → Ingress Controller → [Service] → Pod  ✅ (via allow-ingress.yaml)
+Internet → Ingress Controller → [Service] → Pod  ✅ (Helm NetworkPolicy, allowIngressFromIngress)
 Pod → Pod (same namespace)                        ❌ (blocked by default)
 Pod → Pod (cross-namespace)                       ❌ (blocked by default)
 Pod → kube-dns (53/UDP)                           ✅ (via allow-dns.yaml)
-Prometheus → Pod (metrics port)                   ✅ (via allow-monitoring.yaml)
+Prometheus → Pod (metrics port)                   ✅ (Helm NetworkPolicy, allowIngressFromMonitoring)
 Pod → Internet (egress)                           ❌ (blocked by default — add explicit rule)
 ```
 

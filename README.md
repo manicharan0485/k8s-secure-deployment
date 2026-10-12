@@ -183,4 +183,5 @@ MIT — Free to use and adapt.
 ## 👤 Author
 
 **Manicharan Ravi** — IT Specialist & Cloud Engineer  
-📍 Mainz, Germany | ☁️ Kubernetes · Docker · DevSecOps · Helm · Terraform
+📍 Mainz, Germany | ☁️ Kubernetes · Docker · DevSecOps · Helm · Terraform  
+🌐 [Portfolio](https://manicharan0485.github.io) · [LinkedIn](https://linkedin.com/in/manicharan-ravi)

@@ -1,0 +1,149 @@
+# monitoring/prometheus/security-alerts.yaml
+#
+# Prometheus alerting rules for Kubernetes security events.
+# Apply with: kubectl apply -f security-alerts.yaml -n monitoring
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: k8s-security-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    # ── Pod Security ──────────────────────────────────────────────────────
+    - name: pod-security
+      interval: 1m
+      rules:
+        - alert: PrivilegedContainerRunning
+          expr: |
+            kube_pod_container_info{container!=""} * on(pod, namespace) group_left()
+            kube_pod_spec_containers_security_context_privileged == 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Privileged container detected"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} container {{ $labels.container }} is running as privileged."
+            runbook: "https://github.com/manicharan-ravi/k8s-secure-deployment/docs/runbooks/privileged-container.md"
+
+        - alert: ContainerRunningAsRoot
+          expr: |
+            kube_pod_container_info * on(pod, namespace) group_left()
+            kube_pod_spec_containers_security_context_run_as_user == 0
+          for: 2m
+          labels:
+            severity: high
+          annotations:
+            summary: "Container running as root user"
+            description: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} runs as UID 0."
+
+        - alert: ContainerWithNoResourceLimits
+          expr: |
+            sum by (namespace, pod, container) (
+              kube_pod_container_info{container!=""}
+            ) unless sum by (namespace, pod, container) (
+              kube_pod_container_resource_limits{resource="cpu"}
+            )
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Container has no CPU/memory limits"
+            description: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} has no resource limits set."
+
+    # ── RBAC / Auth ───────────────────────────────────────────────────────
+    - name: rbac-security
+      interval: 5m
+      rules:
+        - alert: ClusterAdminBindingCreated
+          expr: |
+            increase(apiserver_audit_total{objectRef_resource="clusterrolebindings",verb="create"}[5m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "New ClusterRoleBinding created"
+            description: "A new ClusterRoleBinding was created. Verify it's expected and not a privilege escalation."
+
+        - alert: ServiceAccountTokenMounted
+          expr: |
+            kube_pod_spec_volumes_persistentvolumeclaims_info or
+            sum by (namespace, pod) (
+              kube_pod_spec_serviceaccount{serviceaccount!="default"} == 1
+            )
+          for: 1m
+          labels:
+            severity: info
+          annotations:
+            summary: "Service account token mounted in pod"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has a service account token mounted."
+
+    # ── Network ───────────────────────────────────────────────────────────
+    - name: network-security
+      interval: 2m
+      rules:
+        - alert: PodWithoutNetworkPolicy
+          expr: |
+            sum by (namespace, pod) (kube_pod_info)
+            unless on(namespace)
+            sum by (namespace) (kube_networkpolicy_spec_pod_selector_match_expressions_values)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Namespace has no NetworkPolicy"
+            description: "Namespace {{ $labels.namespace }} has pods running but no NetworkPolicy applied."
+
+    # ── Image Security ────────────────────────────────────────────────────
+    - name: image-security
+      interval: 10m
+      rules:
+        - alert: PodUsingLatestImageTag
+          expr: |
+            kube_pod_container_info{image=~".*:latest"}
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod using :latest image tag"
+            description: "Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} uses :latest tag. Pin to specific version."
+
+        - alert: PodUsingImageWithNoTag
+          expr: |
+            kube_pod_container_info{image!~".*:.*"}
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod using image with no tag (implicit :latest)"
+            description: "Container {{ $labels.container }} has no image tag. Implicit :latest is not allowed in production."
+
+    # ── Cluster Health Security ───────────────────────────────────────────
+    - name: cluster-health
+      interval: 5m
+      rules:
+        - alert: K8sApiServerUnauthorizedRequests
+          expr: |
+            rate(apiserver_request_total{code=~"401|403"}[5m]) > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High rate of unauthorized API requests"
+            description: "API server is receiving {{ $value }} unauthorized requests/sec. Possible brute force or misconfiguration."
+
+        - alert: CertificateExpiringIn30Days
+          expr: |
+            apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0
+            and
+            histogram_quantile(0.01, rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m])) < 2592000
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "API server client certificate expiring soon"
+            description: "A client certificate for the API server will expire within 30 days."

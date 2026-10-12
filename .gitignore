@@ -1,0 +1,33 @@
+# Kubernetes secrets — NEVER commit
+*secret*.yaml
+*sealed-secret*.yaml
+kubeconfig
+*.kubeconfig
+
+# Helm
+charts/
+*.tgz
+
+# Reports
+reports/
+trivy-*.json
+trivy-*.txt
+kubesec-*.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

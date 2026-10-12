@@ -1,0 +1,74 @@
+{{- /* helm/base/templates/networkpolicy.yaml */ -}}
+{{- if .Values.networkPolicy.enabled }}
+---
+# NetworkPolicy for {{ .Values.app.name }}
+# Default: deny all ingress and egress, then allow explicitly.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.app.name }}-netpol
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.app.name }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.app.name }}
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    {{- if .Values.networkPolicy.allowIngressFromIngress }}
+    # Allow ingress controller → app
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - port: {{ .Values.service.targetPort }}
+          protocol: TCP
+    {{- end }}
+
+    {{- if .Values.networkPolicy.allowIngressFromMonitoring }}
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: {{ .Values.networkPolicy.metricsPort }}
+          protocol: TCP
+    {{- end }}
+
+  egress:
+    {{- if .Values.networkPolicy.allowEgressToDns }}
+    # Allow DNS resolution (required for service discovery)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+
+    {{- if .Values.networkPolicy.allowEgressToExternal }}
+    # Allow HTTPS egress to external services (opt-in)
+    - ports:
+        - port: 443
+          protocol: TCP
+    {{- end }}
+{{- end }}

@@ -1,0 +1,209 @@
+# .github/workflows/security-scan.yml
+#
+# Security scanning pipeline — runs on every PR.
+# Blocks merge if CRITICAL/HIGH vulnerabilities found.
+#
+# Tools:
+#   Trivy     — container image + filesystem vulnerability scanning
+#   Kubesec   — Kubernetes manifest security scoring
+#   Checkov   — IaC security scanning (Helm, Terraform)
+#   Conftest  — OPA policy validation for manifests
+
+name: Security Scan
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write    # For SARIF upload to GitHub Security tab
+  pull-requests: write       # For PR comments
+
+jobs:
+  # ─── Trivy: Image Vulnerability Scan ─────────────────────────────────────
+  trivy-image-scan:
+    name: Trivy Image Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        run: |
+          docker build -t scan-target:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "scan-target:${{ github.sha }}"
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"           # Fail the job on CRITICAL/HIGH
+          ignore-unfixed: true     # Skip vulns with no fix available
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy-image"
+
+  # ─── Trivy: Filesystem/Config Scan ────────────────────────────────────────
+  trivy-fs-scan:
+    name: Trivy Filesystem Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan (secrets + misconfigs)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-fs.sarif"
+          scanners: "vuln,secret,misconfig"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          exit-code: "1"
+
+      - name: Upload Trivy FS results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-fs.sarif"
+          category: "trivy-fs"
+
+  # ─── Kubesec: Manifest Security Score ─────────────────────────────────────
+  kubesec-scan:
+    name: Kubesec Manifest Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubesec
+        run: |
+          curl -sSL https://github.com/controlplaneio/kubesec/releases/latest/download/kubesec_linux_amd64.tar.gz \
+            | tar xz kubesec
+          sudo mv kubesec /usr/local/bin/
+
+      - name: Scan Helm templates
+        run: |
+          helm template secure-app ./helm/base --values helm/overlays/prod/values.yaml \
+            --set app.name=test-app --set app.version=1.0.0 \
+            --set image.repository=myrepo/myapp --set image.tag=v1.0.0 \
+            > /tmp/rendered.yaml
+
+          kubesec scan /tmp/rendered.yaml | tee kubesec-results.json
+
+          # Fail if score < 5 (minimum acceptable security score)
+          SCORE=$(cat kubesec-results.json | python3 -c "
+          import json, sys
+          results = json.load(sys.stdin)
+          scores = [r.get('score', 0) for r in results if isinstance(r, dict)]
+          print(min(scores) if scores else 0)")
+
+          echo "Kubesec score: $SCORE"
+          if [ "$SCORE" -lt 5 ]; then
+            echo "❌ Kubesec score $SCORE is below minimum threshold of 5"
+            exit 1
+          fi
+          echo "✅ Kubesec score $SCORE passes threshold"
+
+      - name: Upload kubesec results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kubesec-results
+          path: kubesec-results.json
+
+  # ─── Checkov: IaC Security Scan ───────────────────────────────────────────
+  checkov-scan:
+    name: Checkov IaC Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov on Helm charts
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: helm/
+          framework: helm
+          output_format: sarif
+          output_file_path: checkov-helm.sarif
+          soft_fail: false
+
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          output_format: sarif
+          output_file_path: checkov-tf.sarif
+          soft_fail: false
+
+      - name: Upload Checkov results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-helm.sarif
+          category: "checkov-helm"
+
+  # ─── Conftest: OPA Policy Validation ──────────────────────────────────────
+  conftest-scan:
+    name: Conftest OPA Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install conftest
+        run: |
+          curl -sSLO https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz
+          tar xz -f conftest_Linux_x86_64.tar.gz
+          sudo mv conftest /usr/local/bin/
+
+      - name: Render Helm templates
+        run: |
+          helm template secure-app ./helm/base --values helm/overlays/prod/values.yaml \
+            --set app.name=test-app --set app.version=1.0.0 \
+            --set image.repository=myrepo/myapp --set image.tag=v1.0.0 \
+            > /tmp/rendered.yaml
+
+      - name: Run conftest policies
+        run: |
+          conftest test /tmp/rendered.yaml \
+            --policy manifests/pod-security/ \
+            --all-namespaces \
+            --output table
+
+  # ─── Summary comment on PR ────────────────────────────────────────────────
+  scan-summary:
+    name: Post Scan Summary
+    runs-on: ubuntu-latest
+    needs: [trivy-fs-scan, kubesec-scan, checkov-scan]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Comment PR with scan summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = [
+              { name: "Trivy FS", status: "${{ needs.trivy-fs-scan.result }}" },
+              { name: "Kubesec",  status: "${{ needs.kubesec-scan.result }}" },
+              { name: "Checkov",  status: "${{ needs.checkov-scan.result }}" },
+            ]
+            const icon = s => s === 'success' ? '✅' : s === 'skipped' ? '⏭️' : '❌'
+            const rows = jobs.map(j => `| ${j.name} | ${icon(j.status)} ${j.status} |`).join('\n')
+            const body = `## 🔒 Security Scan Results\n\n| Scanner | Result |\n|---------|--------|\n${rows}\n\n> View details in the **Security** tab.`
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            })

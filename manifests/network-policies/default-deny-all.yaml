@@ -1,0 +1,22 @@
+# manifests/network-policies/default-deny-all.yaml
+#
+# Apply this to EVERY namespace.
+# Blocks all ingress and egress by default.
+# Add explicit allow policies on top.
+#
+# Usage:
+#   kubectl apply -f default-deny-all.yaml -n production
+#   kubectl apply -f default-deny-all.yaml -n staging
+#   kubectl apply -f default-deny-all.yaml -n monitoring
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  # Apply to each namespace individually
+spec:
+  podSelector: {}       # Applies to ALL pods in the namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  # No ingress or egress rules = deny everything

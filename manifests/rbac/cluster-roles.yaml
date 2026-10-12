@@ -1,0 +1,139 @@
+# manifests/rbac/cluster-roles.yaml
+#
+# Tiered RBAC roles following least-privilege principle.
+#
+# Role hierarchy:
+#   cluster-admin        (built-in) — infrastructure/SRE team ONLY
+#   cluster-viewer       — read-only across all namespaces (auditors)
+#   namespace-admin      — full control within a single namespace
+#   namespace-developer  — deploy/manage workloads, no RBAC changes
+#   namespace-viewer     — read-only within a namespace (monitoring/audits)
+#   ci-deployer          — deploy-only for CI/CD pipelines
+---
+# ClusterRole: Read-only across entire cluster (for auditors/monitoring)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-viewer
+  labels:
+    app.kubernetes.io/managed-by: security-team
+rules:
+  - apiGroups: ["", "apps", "batch", "autoscaling", "networking.k8s.io", "policy"]
+    resources:
+      - pods
+      - pods/log
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+      - services
+      - endpoints
+      - configmaps
+      - namespaces
+      - nodes
+      - persistentvolumes
+      - persistentvolumeclaims
+      - ingresses
+      - networkpolicies
+      - horizontalpodautoscalers
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  # Explicitly deny secrets read at cluster level
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: []    # No access to secrets
+---
+# ClusterRole: CI/CD pipeline deployer — only what's needed to deploy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ci-deployer
+  labels:
+    app.kubernetes.io/managed-by: security-team
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # NO access to: ClusterRoles, ClusterRoleBindings, Secrets, Nodes
+---
+# Role: Full namespace admin (team leads, SREs for that namespace)
+# Apply as RoleBinding in specific namespaces — NOT a ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-admin
+  labels:
+    app.kubernetes.io/managed-by: security-team
+rules:
+  - apiGroups: ["", "apps", "batch", "autoscaling", "networking.k8s.io", "policy"]
+    resources: ["*"]
+    verbs: ["*"]
+  # Can manage roles within the namespace (but not cluster roles)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Role: Developer — deploy and debug, no RBAC or secrets management
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-developer
+  labels:
+    app.kubernetes.io/managed-by: security-team
+rules:
+  - apiGroups: ["", "apps", "batch", "autoscaling"]
+    resources:
+      - pods
+      - pods/log
+      - pods/exec        # Allow exec for debugging
+      - pods/portforward
+      - deployments
+      - replicasets
+      - statefulsets
+      - services
+      - configmaps
+      - endpoints
+      - events
+      - persistentvolumeclaims
+      - horizontalpodautoscalers
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read-only on ingress (can't change routing)
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  # NO access to: secrets, roles, rolebindings
+---
+# Role: Read-only viewer for namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-viewer
+  labels:
+    app.kubernetes.io/managed-by: security-team
+rules:
+  - apiGroups: ["", "apps", "batch", "autoscaling", "networking.k8s.io"]
+    resources:
+      - pods
+      - pods/log
+      - deployments
+      - replicasets
+      - services
+      - configmaps
+      - endpoints
+      - events
+      - ingresses
+      - networkpolicies
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "watch"]

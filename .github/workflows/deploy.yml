@@ -1,0 +1,151 @@
+# .github/workflows/deploy.yml
+#
+# Deploy pipeline — only runs AFTER security scans pass.
+# Uses OIDC (no static credentials) for AWS/GCP auth.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write    # Required for OIDC auth
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─── Build and push image ─────────────────────────────────────────────────
+  build-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-,format=short
+
+      - name: Build and push (with provenance)
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true    # SLSA provenance attestation
+          sbom: true          # Generate SBOM
+
+  # ─── Image scan (post-push, pre-deploy) ───────────────────────────────────
+  post-push-scan:
+    name: Post-Push Image Scan
+    runs-on: ubuntu-latest
+    needs: build-push
+    steps:
+      - name: Scan pushed image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ needs.build-push.outputs.image-tag }}"
+          format: "table"
+          severity: "CRITICAL"
+          exit-code: "1"   # Block deploy on CRITICAL
+
+  # ─── Deploy to staging ────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-push, post-push-scan]
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl (OIDC — no static credentials)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_STAGING }}
+          aws-region: eu-central-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name my-cluster --region eu-central-1
+
+      - name: Helm upgrade staging
+        run: |
+          helm upgrade --install my-app ./helm/base \
+            --namespace staging \
+            --create-namespace \
+            --values helm/overlays/dev/values.yaml \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=sha-${{ github.sha }} \
+            --set app.name=my-app \
+            --set app.version=${{ github.sha }} \
+            --wait \
+            --timeout 5m \
+            --atomic
+
+      - name: Verify rollout
+        run: kubectl rollout status deployment/my-app -n staging --timeout=5m
+
+  # ─── Deploy to production (manual approval required) ─────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment:
+      name: production
+      url: https://myapp.example.com
+    if: startsWith(github.ref, 'refs/tags/v')   # Only on version tags
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_PROD }}
+          aws-region: eu-central-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name my-cluster-prod --region eu-central-1
+
+      - name: Helm upgrade production
+        run: |
+          helm upgrade --install my-app ./helm/base \
+            --namespace production \
+            --create-namespace \
+            --values helm/overlays/prod/values.yaml \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.ref_name }} \
+            --set app.name=my-app \
+            --set app.version=${{ github.ref_name }} \
+            --wait \
+            --timeout 10m \
+            --atomic \
+            --cleanup-on-fail
+
+      - name: Verify production rollout
+        run: kubectl rollout status deployment/my-app -n production --timeout=10m
+
+      - name: Notify deployment
+        if: success()
+        run: echo "✅ Deployed ${{ github.ref_name }} to production"

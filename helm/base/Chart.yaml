@@ -1,0 +1,17 @@
+apiVersion: v2
+name: secure-app-base
+description: |
+  Secure-by-default Kubernetes application Helm chart.
+  Enforces: Pod Security Context, RBAC least-privilege, Network Policies,
+  resource limits, liveness/readiness probes, HPA, and PodDisruptionBudget.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - security
+  - kubernetes
+  - devsecops
+  - hardened
+maintainers:
+  - name: Manicharan Ravi
+    email: manicharan.ravi999@gmail.com

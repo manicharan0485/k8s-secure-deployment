@@ -1,0 +1,30 @@
+# helm/overlays/dev/values.yaml
+# Development overrides — relaxed resources, debug logging, single replica
+
+replicaCount: 1
+
+image:
+  pullPolicy: Always
+
+resources:
+  limits:
+    cpu: "200m"
+    memory: "128Mi"
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+
+autoscaling:
+  enabled: false    # No HPA in dev
+
+podDisruptionBudget:
+  enabled: false    # No PDB in dev
+
+networkPolicy:
+  allowEgressToExternal: true    # Allow external calls during dev/testing
+
+env:
+  - name: LOG_LEVEL
+    value: "debug"
+  - name: ENVIRONMENT
+    value: "dev"

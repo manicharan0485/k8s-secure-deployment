@@ -1,0 +1,50 @@
+# manifests/namespaces/production.yaml
+# Production namespace with Pod Security Standards enforced at "restricted" level.
+# "restricted" = strictest profile: non-root, no privilege escalation, read-only FS,
+#                drop all caps, seccomp required.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    # Pod Security Standards — enforced at restricted level
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    # Label for network policy selectors
+    kubernetes.io/metadata.name: production
+    environment: production
+---
+# manifests/namespaces/staging.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    # Staging: enforce "baseline" (less strict), audit/warn "restricted"
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    kubernetes.io/metadata.name: staging
+    environment: staging
+---
+# manifests/namespaces/monitoring.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    # Monitoring tools (Prometheus, Grafana) need more permissions
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: latest
+    kubernetes.io/metadata.name: monitoring
+    environment: monitoring

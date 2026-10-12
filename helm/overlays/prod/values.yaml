@@ -1,0 +1,31 @@
+# helm/overlays/prod/values.yaml
+# Production overrides — stricter limits, more replicas, external egress off
+
+replicaCount: 3
+
+image:
+  pullPolicy: Always    # Always pull in prod
+
+resources:
+  limits:
+    cpu: "1000m"
+    memory: "512Mi"
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+
+networkPolicy:
+  allowEgressToExternal: false   # Strict in prod
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2    # Always keep 2 pods up during disruptions
+
+# Production: use sealed secrets or external secrets — never plain secrets
+envFrom: []

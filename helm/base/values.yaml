@@ -1,0 +1,162 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# helm/base/values.yaml
+# Secure-by-default Helm chart values.
+# All security contexts enforced by default — override in overlays if needed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Application ──────────────────────────────────────────────────────────────
+app:
+  name: ""            # Required: application name
+  version: ""         # Required: application version label
+
+image:
+  repository: ""      # Required: image repository
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  # pullSecrets: []   # Uncomment if using private registry
+
+replicaCount: 2       # Always run 2+ for HA
+
+# ── Service ───────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP     # ClusterIP by default — never NodePort/LoadBalancer without review
+  port: 8080
+  targetPort: 8080
+  protocol: TCP
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts: []
+  tls: []
+
+# ── Pod Security Context (applies to all containers in the pod) ──────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault   # Use default seccomp profile
+
+# ── Container Security Context ────────────────────────────────────────────────
+securityContext:
+  allowPrivilegeEscalation: false   # CRITICAL: prevent privilege escalation
+  readOnlyRootFilesystem: true      # Prevent runtime file system writes
+  privileged: false                  # Never privileged
+  capabilities:
+    drop:
+      - ALL                          # Drop all Linux capabilities
+    # add: []                        # Only add specific caps if absolutely required
+
+# ── Resource Limits (DoS prevention + node stability) ────────────────────────
+resources:
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+# ── Liveness & Readiness Probes ───────────────────────────────────────────────
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  failureThreshold: 3
+
+# ── HPA (Horizontal Pod Autoscaler) ───────────────────────────────────────────
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Service Account ───────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false   # Disable auto-mount unless needed
+  annotations: {}
+
+# ── Network Policy ────────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: true
+  # Pods this policy applies to (use app.name label by default)
+  allowIngressFromIngress: true    # Allow ingress controller traffic
+  allowIngressFromMonitoring: true # Allow Prometheus scraping
+  metricsPort: 9090                # Metrics endpoint port for Prometheus
+  allowEgressToDns: true           # Allow DNS resolution
+  allowEgressToExternal: false     # Block external egress by default
+
+# ── Environment Variables ─────────────────────────────────────────────────────
+env: []
+  # - name: LOG_LEVEL
+  #   value: "info"
+
+# NEVER put secrets here — use sealed secrets or external secrets operator
+envFrom: []
+  # - secretRef:
+  #     name: my-app-secrets
+
+# ── Volume Mounts (for read-only root filesystem compatibility) ───────────────
+# Apps that need /tmp or /var/run must use emptyDir volumes
+extraVolumes:
+  - name: tmp-dir
+    emptyDir: {}
+  - name: run-dir
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tmp-dir
+    mountPath: /tmp
+  - name: run-dir
+    mountPath: /var/run
+
+# ── Pod Disruption Budget ─────────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# ── Topology Spread (spread pods across nodes/zones) ─────────────────────────
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels: {}   # Filled in by template using app.name
+
+# ── Pod Anti-Affinity ─────────────────────────────────────────────────────────
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchExpressions: []   # Filled in by template
+
+# ── Node Selector & Tolerations ───────────────────────────────────────────────
+nodeSelector: {}
+tolerations: []
+
+# ── Labels & Annotations ──────────────────────────────────────────────────────
+labels: {}
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"

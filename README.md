@@ -1,7 +1,9 @@
 # 🔒 K8s Secure Deployment
 
-> **Production-grade Kubernetes security — RBAC, Network Policies, Pod Security, image scanning, and CI/CD DevSecOps pipeline.**  
+> **Kubernetes security reference — RBAC, Network Policies, Pod Security, image scanning, and CI/CD DevSecOps pipeline.**  
 > Helm charts + manifests that enforce security by default, not as an afterthought.
+
+> 🧪 **Reference / lab project.** Original practice code written to demonstrate the approach. It is not taken from an employer's codebase. Review and adapt before using it in your own environment.
 
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=flat&logo=kubernetes&logoColor=white)
 ![Helm](https://img.shields.io/badge/Helm-0F1689?style=flat&logo=helm&logoColor=white)
@@ -180,5 +182,5 @@ MIT — Free to use and adapt.
 
 ## 👤 Author
 
-**Manicharan Ravi** — Cloud Security Engineer  
+**Manicharan Ravi** — IT Specialist & Cloud Engineer  
 📍 Mainz, Germany | ☁️ Kubernetes · Docker · DevSecOps · Helm · Terraform

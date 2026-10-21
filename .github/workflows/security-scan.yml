@@ -71,6 +71,7 @@ jobs:
           output: "trivy-fs.sarif"
           scanners: "vuln,secret,misconfig"
           severity: "CRITICAL,HIGH"
+          limit-severities-for-sarif: true   # otherwise SARIF output ignores `severity` and MEDIUM findings fail the job
           trivyignores: ".trivyignore"
           exit-code: "1"
 
@@ -107,12 +108,13 @@ jobs:
           cat kubesec-results.json
 
           # Fail if score < 5 (minimum acceptable security score)
-          # kubesec only scores workloads; other kinds report valid=false/score=0
-          # ("could not find schema"), so only count valid results.
+          # kubesec reports score 0 for kinds it does not score (Service, Role, ...),
+          # so only count workload objects.
           SCORE=$(python3 -c "
           import json
           results = json.load(open('kubesec-results.json'))
-          scores = [r['score'] for r in results if r.get('valid')]
+          workloads = ('Deployment/', 'StatefulSet/', 'DaemonSet/', 'Job/', 'CronJob/', 'Pod/')
+          scores = [r['score'] for r in results if r.get('object', '').startswith(workloads)]
           print(min(scores) if scores else 0)")
 
           echo "Kubesec score: $SCORE"

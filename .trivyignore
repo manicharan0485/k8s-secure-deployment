@@ -1,0 +1,6 @@
+# Accepted findings, each with a reason. Review when roles change.
+# KSV-0056: namespace-admin and ci-deployer must manage ingresses/networkpolicies/services by design;
+# they are bound per namespace with RoleBindings, never cluster-wide.
+KSV-0056
+# KSV-0113: the chart's Role can read ONE named secret (<app>-secrets) via resourceNames; it is not a wildcard.
+KSV-0113

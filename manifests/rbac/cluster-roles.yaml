@@ -75,9 +75,27 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: security-team
 rules:
+  # Explicit resources, no wildcards. Secrets are deliberately excluded.
   - apiGroups: ["", "apps", "batch", "autoscaling", "networking.k8s.io", "policy"]
-    resources: ["*"]
-    verbs: ["*"]
+    resources:
+      - pods
+      - pods/log
+      - deployments
+      - replicasets
+      - statefulsets
+      - daemonsets
+      - services
+      - endpoints
+      - configmaps
+      - events
+      - persistentvolumeclaims
+      - horizontalpodautoscalers
+      - jobs
+      - cronjobs
+      - ingresses
+      - networkpolicies
+      - poddisruptionbudgets
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # Can manage roles within the namespace (but not cluster roles)
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
@@ -95,7 +113,6 @@ rules:
     resources:
       - pods
       - pods/log
-      - pods/exec        # Allow exec for debugging
       - pods/portforward
       - deployments
       - replicasets
@@ -109,6 +126,10 @@ rules:
       - jobs
       - cronjobs
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Debug with ephemeral containers (kubectl debug) instead of exec into prod pods
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["update", "patch"]
   # Read-only on ingress (can't change routing)
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "networkpolicies"]

@@ -33,8 +33,6 @@ spec:
         app.kubernetes.io/version: {{ .Values.app.version | quote }}
       annotations:
         {{- toYaml .Values.podAnnotations | nindent 8 }}
-        # Force pod restart on config change
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       # ── Service Account ──────────────────────────────────────────────────
       serviceAccountName: {{ .Values.app.name }}
@@ -87,7 +85,7 @@ spec:
       # ── Containers ────────────────────────────────────────────────────────
       containers:
         - name: {{ .Values.app.name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ required "image.repository is required" .Values.image.repository }}:{{ required "image.tag is required (do not use latest)" .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           # ── Container Security Context ────────────────────────────────────

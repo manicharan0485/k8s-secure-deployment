@@ -1,0 +1,9 @@
+# Local test cluster. Pod Security Admission is built in (v1.25+), so no extra flags are needed.
+# NetworkPolicy needs a CNI that enforces it: kindnet is disabled; install Calico or Cilium (see Makefile).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+nodes:
+  - role: control-plane
+  - role: worker

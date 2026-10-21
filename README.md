@@ -185,3 +185,16 @@ MIT — Free to use and adapt.
 **Manicharan Ravi** — IT Specialist & Cloud Engineer  
 📍 Mainz, Germany | ☁️ Kubernetes · Docker · DevSecOps · Helm · Terraform  
 🌐 [Portfolio](https://manicharan0485.github.io) · [LinkedIn](https://linkedin.com/in/manicharan-ravi)
+## Additional controls
+
+| Control | Location |
+|---|---|
+| Native CEL admission policy (no `:latest`, memory limits, read-only FS, no hostNetwork) | `manifests/admission-policy/validating-admission-policy.yaml` (Kubernetes 1.30+) |
+| Kyverno: registry allow-list, cosign signature verification, no privileged/hostPath | `manifests/admission-policy/kyverno/policies.yaml` |
+| Falco runtime rules | `runtime/falco-rules.yaml` |
+| API server audit policy | `audit/audit-policy.yaml` |
+| Local test cluster (kind, no default CNI) | `kind/kind-config.yaml` |
+| Insecure pod demo and smoke tests | `examples/insecure-pod.yaml`, `scripts/verify.sh` |
+| Full checklist | `docs/security-checklist.md` |
+
+These manifests have not been run against a live cluster. Replace the `registry.example.com` and `YOUR_ORG/YOUR_REPO` placeholders and test in audit mode first.

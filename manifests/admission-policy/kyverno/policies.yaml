@@ -1,0 +1,79 @@
+# Kyverno alternative/addition (install: https://kyverno.io/docs/installation/).
+# Adds capabilities the native policies lack: image signature verification, mutation, generation.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-trusted-registry
+  annotations:
+    policies.kyverno.io/description: Only allow images from the approved registry.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: approved-registry
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [production]
+      validate:
+        message: "Images must come from registry.example.com/."
+        pattern:
+          spec:
+            containers:
+              - image: "registry.example.com/*"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-cosign-keyless
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [production]
+      verifyImages:
+        - imageReferences: ["registry.example.com/*"]
+          attestors:
+            - entries:
+                - keyless:
+                    # Replace with your CI identity.
+                    subject: "https://github.com/YOUR_ORG/YOUR_REPO/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-privileged-and-hostpath
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: no-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+    - name: no-hostpath
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "hostPath volumes are not allowed."
+        pattern:
+          spec:
+            =(volumes):
+              - X(hostPath): "null"

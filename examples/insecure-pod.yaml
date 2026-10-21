@@ -1,0 +1,24 @@
+# INTENTIONALLY INSECURE. Used to demonstrate what Pod Security Admission blocks.
+#   kubectl apply -f examples/insecure-pod.yaml -n production   # rejected (restricted)
+#   kubectl apply -f examples/insecure-pod.yaml -n staging    # rejected (baseline: privileged/hostPath/hostNetwork)
+# DO NOT deploy to a real cluster.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure-demo
+spec:
+  hostNetwork: true # shares node network namespace
+  hostPID: true # sees every host process
+  containers:
+    - name: bad
+      image: busybox:latest # mutable tag
+      command: ["sleep", "3600"]
+      securityContext:
+        privileged: true # near-root on the node
+        runAsUser: 0
+        allowPrivilegeEscalation: true
+      volumeMounts:
+        - { name: host-root, mountPath: /host }
+  volumes:
+    - name: host-root
+      hostPath: { path: / } # full node filesystem

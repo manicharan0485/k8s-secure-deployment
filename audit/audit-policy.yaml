@@ -1,0 +1,31 @@
+# kube-apiserver audit policy. Enable with:
+#   --audit-policy-file=/etc/kubernetes/audit-policy.yaml
+#   --audit-log-path=/var/log/kubernetes/audit.log --audit-log-maxage=30 --audit-log-maxbackup=10
+# Managed clusters (EKS/GKE/AKS) expose audit logs through their own logging features instead.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages: ["RequestReceived"]
+rules:
+  # Never log secret/configmap payloads; metadata only.
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "configmaps", "serviceaccounts/token"]
+  # Full detail for RBAC and admission changes.
+  - level: RequestResponse
+    resources:
+      - group: "rbac.authorization.k8s.io"
+      - group: "admissionregistration.k8s.io"
+  # Exec/attach/portforward into pods.
+  - level: Request
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach", "pods/portforward"]
+  # Drop noisy read-only health traffic.
+  - level: None
+    nonResourceURLs: ["/healthz*", "/livez*", "/readyz*", "/version"]
+  - level: None
+    users: ["system:kube-proxy"]
+    verbs: ["watch"]
+  # Everything else at Metadata.
+  - level: Metadata

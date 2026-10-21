@@ -1,0 +1,46 @@
+$ kubectl apply -f manifests/namespaces/
+namespace/production unchanged
+namespace/staging unchanged
+namespace/monitoring unchanged
+
+$ kubectl apply -f manifests/network-policies/ -n production
+networkpolicy.networking.k8s.io/allow-dns-egress created
+networkpolicy.networking.k8s.io/allow-from-ingress-controller created
+networkpolicy.networking.k8s.io/allow-prometheus-scraping created
+networkpolicy.networking.k8s.io/default-deny-all created
+
+$ kubectl apply -f manifests/network-policies/ -n staging
+networkpolicy.networking.k8s.io/allow-dns-egress created
+networkpolicy.networking.k8s.io/allow-from-ingress-controller created
+networkpolicy.networking.k8s.io/allow-prometheus-scraping created
+networkpolicy.networking.k8s.io/default-deny-all created
+
+$ kubectl get ns production staging --show-labels
+NAME         STATUS   AGE   LABELS
+production   Active   26s   environment=production
+    kubernetes.io/metadata.name=production
+    pod-security.kubernetes.io/audit-version=latest
+    pod-security.kubernetes.io/audit=restricted
+    pod-security.kubernetes.io/enforce-version=latest
+    pod-security.kubernetes.io/enforce=restricted
+    pod-security.kubernetes.io/warn-version=latest
+    pod-security.kubernetes.io/warn=restricted
+staging      Active   26s   environment=staging
+    kubernetes.io/metadata.name=staging
+    pod-security.kubernetes.io/audit-version=latest
+    pod-security.kubernetes.io/audit=restricted
+    pod-security.kubernetes.io/enforce-version=latest
+    pod-security.kubernetes.io/enforce=baseline
+    pod-security.kubernetes.io/warn-version=latest
+    pod-security.kubernetes.io/warn=restricted
+
+$ kubectl apply -f manifests/admission-policy/validating-admission-policy.yaml
+validatingadmissionpolicy.admissionregistration.k8s.io/pod-baseline-guardrails configured
+validatingadmissionpolicybinding.admissionregistration.k8s.io/pod-baseline-guardrails-prod unchanged
+
+$ kubectl get networkpolicy -n production
+NAME                            POD-SELECTOR   AGE
+allow-dns-egress                <none>         2s
+allow-from-ingress-controller   expose=true    2s
+allow-prometheus-scraping       <none>         1s
+default-deny-all                <none>         1s

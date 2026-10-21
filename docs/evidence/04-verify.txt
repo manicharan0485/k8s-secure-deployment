@@ -1,0 +1,7 @@
+$ ./scripts/verify.sh
+PASS  privileged pod is rejected by PSA
+PASS  root user pod is rejected by PSA
+PASS  hostPath pod is rejected
+PASS  default-deny NetworkPolicy exists
+
+passed=4 failed=0

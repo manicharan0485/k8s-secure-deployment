@@ -1,0 +1,9 @@
+$ kubectl version
+Client Version: v1.36.1
+Kustomize Version: v5.8.1
+Server Version: v1.37.0
+
+$ kubectl get nodes
+NAME                    STATUS   ROLES           AGE    VERSION
+k8s-sec-control-plane   Ready    control-plane   109s   v1.37.0
+k8s-sec-worker          Ready    <none>          95s    v1.37.0

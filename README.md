@@ -198,3 +198,7 @@ MIT — Free to use and adapt.
 | Full checklist | `docs/security-checklist.md` |
 
 These manifests have not been run against a live cluster. Replace the `registry.example.com` and `YOUR_ORG/YOUR_REPO` placeholders and test in audit mode first.
+
+## Test evidence
+
+Output from a local kind cluster (Kubernetes v1.37, Calico CNI) is in `docs/evidence/`: Pod Security Admission rejecting `examples/insecure-pod.yaml`, the admission policy denying a `:latest` image, and `scripts/verify.sh` passing 4/4. The network policies in `manifests/network-policies/` have no namespace set; apply them per namespace with `-n`.

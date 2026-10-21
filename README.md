@@ -185,3 +185,9 @@ MIT — Free to use and adapt.
 **Manicharan Ravi** — IT Specialist & Cloud Engineer  
 📍 Mainz, Germany | ☁️ Kubernetes · Docker · DevSecOps · Helm · Terraform  
 🌐 [Portfolio](https://manicharan0485.github.io) · [LinkedIn](https://linkedin.com/in/manicharan-ravi)
+## CI scan inputs
+
+- `Dockerfile` + `app/`: minimal hardened reference image (non-root, read-only-root compatible) so the image scan has a target. Replace with your application.
+- `policy/workload.rego`: Conftest rules run against `helm template` output.
+- `helm/ci-values.yaml`: values used by scanners to render the chart. The chart now requires `image.repository` and `image.tag` (no `:latest` default).
+- `.trivyignore`: accepted findings, each with a written reason.

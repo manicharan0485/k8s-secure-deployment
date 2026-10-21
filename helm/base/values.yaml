@@ -11,7 +11,7 @@ app:
 
 image:
   repository: ""      # Required: image repository
-  tag: "latest"
+  tag: ""             # Required: pin an explicit version or digest, never "latest"
   pullPolicy: IfNotPresent
   # pullSecrets: []   # Uncomment if using private registry
 

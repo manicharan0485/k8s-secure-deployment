@@ -1,4 +1,4 @@
-{{- /* helm/base/templates/service.yaml */ -}}
+# helm/base/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -18,7 +18,7 @@ spec:
       protocol: {{ .Values.service.protocol }}
 {{- if .Values.autoscaling.enabled }}
 ---
-{{- /* helm/base/templates/hpa.yaml */ -}}
+# helm/base/templates/hpa.yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -62,7 +62,7 @@ spec:
 {{- end }}
 {{- if .Values.podDisruptionBudget.enabled }}
 ---
-{{- /* helm/base/templates/pdb.yaml */ -}}
+# helm/base/templates/pdb.yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

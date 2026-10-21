@@ -1,0 +1,8 @@
+# Values used by CI scanners (Checkov, Kubesec, Conftest) to render the chart.
+# Not for deployment: real releases set these per application.
+app:
+  name: test-app
+  version: "1.0.0"
+image:
+  repository: myrepo/myapp
+  tag: v1.0.0

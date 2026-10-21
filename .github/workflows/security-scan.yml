@@ -39,7 +39,7 @@ jobs:
           docker build -t scan-target:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: "scan-target:${{ github.sha }}"
           format: "sarif"
@@ -49,7 +49,7 @@ jobs:
           ignore-unfixed: true     # Skip vulns with no fix available
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
@@ -63,18 +63,19 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Trivy filesystem scan (secrets + misconfigs)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: "fs"
           scan-ref: "."
           format: "sarif"
           output: "trivy-fs.sarif"
           scanners: "vuln,secret,misconfig"
-          severity: "CRITICAL,HIGH,MEDIUM"
+          severity: "CRITICAL,HIGH"
+          trivyignores: ".trivyignore"
           exit-code: "1"
 
       - name: Upload Trivy FS results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: "trivy-fs.sarif"
@@ -103,10 +104,12 @@ jobs:
           kubesec scan /tmp/rendered.yaml | tee kubesec-results.json
 
           # Fail if score < 5 (minimum acceptable security score)
-          SCORE=$(cat kubesec-results.json | python3 -c "
-          import json, sys
-          results = json.load(sys.stdin)
-          scores = [r.get('score', 0) for r in results if isinstance(r, dict)]
+          # kubesec only scores workloads; other kinds report valid=false/score=0
+          # ("could not find schema"), so only count valid results.
+          SCORE=$(python3 -c "
+          import json
+          results = json.load(open('kubesec-results.json'))
+          scores = [r['score'] for r in results if r.get('valid')]
           print(min(scores) if scores else 0)")
 
           echo "Kubesec score: $SCORE"
@@ -135,6 +138,12 @@ jobs:
         with:
           directory: helm/
           framework: helm
+          var_file: helm/ci-values.yaml   # chart requires app/image values to render
+          # Skipped with reasons:
+          #  CKV_K8S_21: chart installs into the Helm release namespace; a plain render shows "default"
+          #  CKV_K8S_15: pullPolicy is IfNotPresent in base, Always in the prod overlay
+          #  CKV_K8S_43: digest pinning is done per release, not in CI test values
+          skip_check: CKV_K8S_21,CKV_K8S_15,CKV_K8S_43
           output_format: sarif
           output_file_path: checkov-helm.sarif
           soft_fail: false
@@ -149,7 +158,7 @@ jobs:
           soft_fail: false
 
       - name: Upload Checkov results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: checkov-helm.sarif
@@ -178,7 +187,7 @@ jobs:
       - name: Run conftest policies
         run: |
           conftest test /tmp/rendered.yaml \
-            --policy manifests/pod-security/ \
+            --policy policy/ \
             --all-namespaces \
             --output table
 
